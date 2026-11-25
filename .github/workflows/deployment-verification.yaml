@@ -1,0 +1,106 @@
+name: Deployment Verification
+
+on:
+  workflow_dispatch:
+
+    inputs:
+
+      image_digest:
+        description: Published GHCR image digest
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+
+  verify-deployment:
+
+    if: github.ref == 'refs/heads/main'
+
+    runs-on: [self-hosted, cicd-deploy]
+
+    environment: staging
+
+    timeout-minutes: 15
+
+    steps:
+
+      - name: Configure runner environment
+        run: |
+          echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+
+          echo "KUBECONFIG=$HOME/.kube/cicd-learning.yaml" \
+            >> "$GITHUB_ENV"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate deployment input
+        env:
+          DIGEST: ${{ inputs.image_digest }}
+
+        shell: bash
+
+        run: |
+          if [[ ! "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Invalid image digest"
+            exit 1
+          fi
+
+      - name: Determine image repository
+        id: image
+
+        shell: bash
+
+        run: |
+          IMAGE=$(echo "ghcr.io/$GITHUB_REPOSITORY" \
+            | tr '[:upper:]' '[:lower:]')
+
+          echo "repository=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Helm chart
+        env:
+          IMAGE: ${{ steps.image.outputs.repository }}
+          DIGEST: ${{ inputs.image_digest }}
+
+        run: |
+          helm lint ./chart \
+            -f chart/values-staging.yaml \
+            --set-string image.repository="$IMAGE" \
+            --set-string image.digest="$DIGEST"
+
+      - name: Deploy application into staging
+        env:
+          IMAGE: ${{ steps.image.outputs.repository }}
+          DIGEST: ${{ inputs.image_digest }}
+
+        run: |
+          helm upgrade --install cicd-verification ./chart \
+            --kube-context cicd-learning \
+            --namespace staging \
+            -f chart/values-staging.yaml \
+            --set-string image.repository="$IMAGE" \
+            --set-string image.digest="$DIGEST" \
+            --atomic \
+            --wait \
+            --timeout 5m
+
+      - name: Verify deployment rollout
+        run: |
+          kubectl \
+            --context cicd-learning \
+            -n staging \
+            rollout status deployment/cicd-verification \
+            --timeout=180s
+
+      - name: Inspect deployed resources
+        run: |
+          kubectl \
+            --context cicd-learning \
+            get all -n staging
+
+          helm \
+            --kube-context cicd-learning \
+            list -n staging

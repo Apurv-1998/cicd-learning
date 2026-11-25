@@ -2,6 +2,9 @@ replicaCount: 1
 
 environment: staging
 
+imagePullSecrets:
+  - name: ghcr-secret
+
 resources:
   requests:
     cpu: 100m

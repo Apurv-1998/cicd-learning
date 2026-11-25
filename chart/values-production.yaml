@@ -2,6 +2,9 @@ replicaCount: 3
 
 environment: production
 
+imagePullSecrets:
+  - name: ghcr-secret
+
 resources:
   requests:
     cpu: 200m

@@ -5,6 +5,8 @@ image:
   digest: ""
   pullPolicy: IfNotPresent
 
+imagePullSecrets: []
+
 environment: local
 
 service:
