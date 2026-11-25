@@ -1,0 +1,9 @@
+.git
+.github
+src
+chart
+scripts
+.idea
+.vscode
+target/*
+!target/cicd-demo.jar
