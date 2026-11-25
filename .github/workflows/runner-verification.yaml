@@ -1,0 +1,90 @@
+name: Self Hosted Runner Verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+
+  verify-runner:
+
+    if: github.ref == 'refs/heads/main'
+
+    runs-on: [self-hosted, cicd-deploy]
+
+    timeout-minutes: 10
+
+    steps:
+
+      - name: Configure runner environment
+        shell: bash
+        run: |
+          echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+
+          echo "/opt/homebrew/sbin" >> "$GITHUB_PATH"
+
+          echo "KUBECONFIG=$HOME/.kube/cicd-learning.yaml" \
+            >> "$GITHUB_ENV"
+
+      - name: Display runner information
+        run: |
+          echo "Runner name: $RUNNER_NAME"
+
+          echo "Runner OS: $RUNNER_OS"
+
+          echo "Runner architecture: $RUNNER_ARCH"
+
+          echo "Hostname: $(hostname)"
+
+          echo "Current user: $(whoami)"
+
+          echo "Working directory: $(pwd)"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify installed tools
+        run: |
+          kubectl version --client
+
+          helm version
+
+          jq --version
+
+          curl --version
+
+      - name: Verify Kubernetes context
+        run: |
+          kubectl config current-context
+
+          kubectl config get-contexts
+
+      - name: Verify Kubernetes connectivity
+        run: |
+          kubectl \
+            --context cicd-learning \
+            get nodes
+
+      - name: Verify staging namespace
+        run: |
+          kubectl \
+            --context cicd-learning \
+            get pods -n staging
+
+      - name: Verify production namespace
+        run: |
+          kubectl \
+            --context cicd-learning \
+            get pods -n production
+
+      - name: Verify Helm connectivity
+        run: |
+          helm \
+            --kube-context cicd-learning \
+            list -n staging
+
+      - name: Verification successful
+        run: |
+          echo "Runner can access the learning Kubernetes cluster."
